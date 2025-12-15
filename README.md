@@ -1,5 +1,5 @@
 # scoop-ctf
-最后更新时间: 2025年12月16日 00:29:00
+最后更新时间: 2025年12月16日 00:38:15
 
 ## 统计信息
 
@@ -14,3 +14,8 @@
 **应用程序总数**: 591
 
 **脚本总数**: 15
+
+### 添加 scoop-ctf bucket 信息
+```bash
+scoop bucket add scoop-ctf https://github.com/scoop-ctf/scoop-ctf
+```
