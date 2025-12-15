@@ -1,3 +1,5 @@
+name: Sync Scoop CTF Buckets
+
 on:
   schedule:
     # 每天北京时间早上8点运行 (UTC时间0点)
