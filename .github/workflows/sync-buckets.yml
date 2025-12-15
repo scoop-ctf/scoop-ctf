@@ -10,7 +10,7 @@ on:
       bucket:
         description: 'Specific bucket to sync (leave empty for all)'
         required: false
-        default: ''
+        default: 'all'
 
 env:
   TZ: Asia/Shanghai
