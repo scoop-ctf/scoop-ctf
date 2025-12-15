@@ -16,20 +16,74 @@ env:
   TZ: Asia/Shanghai
 
 jobs:
+  generate-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+    - name: 检出代码库
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GH_TOKEN }}
+        
+    - name: 读取 buckets 配置
+      id: set-matrix
+      run: |
+        # 读取 YAML 配置文件
+        if [ -f "buckets.yml" ]; then
+          echo "读取 buckets.yml 配置文件"
+          # 将 YAML 转换为 JSON
+          python3 -c "
+import yaml
+import json
+import os
+
+# 尝试导入 yaml 库
+try:
+    import yaml
+except ImportError:
+    os.system('pip3 install pyyaml > /dev/null 2>&1')
+    import yaml
+
+with open('buckets.yml', 'r') as f:
+    data = yaml.safe_load(f)
+
+# 生成 matrix
+buckets = data.get('buckets', [])
+matrix = {'bucket': buckets}
+print('matrix=' + json.dumps(matrix))
+" | tee matrix.json
+          
+          # 从输出中提取 matrix
+          matrix_output=$(python3 -c "
+import yaml
+import json
+import os
+
+with open('buckets.yml', 'r') as f:
+    data = yaml.safe_load(f)
+
+buckets = data.get('buckets', [])
+matrix = {'bucket': buckets}
+print(json.dumps(matrix))
+")
+          
+          echo "matrix=$matrix_output" >> $GITHUB_OUTPUT
+        else
+          echo "buckets.yml 不存在，使用默认配置"
+          # 默认配置
+          default_matrix='{"bucket":[{"name":"sec","repo":"tldro/scoop-security"},{"name":"ar","repo":"arch3rPro/PST-Bucket"},{"name":"ctftools","repo":"kengwang/scoop-ctftools-bucket"}]}'
+          echo "matrix=$default_matrix" >> $GITHUB_OUTPUT
+        fi
+
   sync-buckets:
+    needs: generate-matrix
     runs-on: ubuntu-latest
     
     strategy:
       fail-fast: false
       max-parallel: 1  # 一次只运行一个job，避免并发推送冲突
-      matrix:
-        bucket:
-          - name: sec
-            repo: tldro/scoop-security
-          - name: ar
-            repo: arch3rPro/PST-Bucket
-          - name: ctftools
-            repo: kengwang/scoop-ctftools-bucket
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
     
     steps:
     - name: 检出代码库
@@ -44,11 +98,13 @@ jobs:
       run: |
         git config --global user.name "GitHub Actions Bot"
         git config --global user.email "actions@github.com"
+        
     - name: 如果指定了仓库，则跳过
       if: github.event.inputs.bucket != '' && github.event.inputs.bucket != matrix.bucket.name
       run: |
         echo "跳过 ${{ matrix.bucket.name }} - 只同步 ${{ github.event.inputs.bucket }}"
         exit 0
+        
     - name: 检查现有文件
       if: github.event.inputs.bucket == '' || github.event.inputs.bucket == matrix.bucket.name
       id: check_existing
@@ -61,6 +117,7 @@ jobs:
           echo "existing_count=0" >> $GITHUB_OUTPUT
           echo "没有找到 ${{ matrix.bucket.name }} 的文件"
         fi
+        
     - name: 克隆源代码库
       if: github.event.inputs.bucket == '' || github.event.inputs.bucket == matrix.bucket.name
       run: |
@@ -123,6 +180,7 @@ jobs:
         # 清理临时目录
         cd ../..
         rm -rf temp_sync
+        
     - name: 提交此仓库的更改
       if: github.event.inputs.bucket == '' || github.event.inputs.bucket == matrix.bucket.name
       run: |
@@ -143,6 +201,7 @@ jobs:
           git commit -m "更新 ${{ matrix.bucket.name }} - $total_count 个文件 ($bucket_count 个 bucket + $script_count 个脚本) ($(date '+%Y-%m-%d %H:%M:%S'))"
           echo "提交了 ${{ matrix.bucket.name }} 的更改: $total_count 个文件"
         fi
+        
     - name: 推送更改
       if: github.event.inputs.bucket == '' || github.event.inputs.bucket == matrix.bucket.name
       run: |
@@ -166,6 +225,7 @@ jobs:
         else
           echo "没有新的提交需要推送"
         fi
+        
   update-readme:
     needs: sync-buckets
     runs-on: ubuntu-latest
@@ -201,18 +261,57 @@ jobs:
         total_apps=0
         total_scripts=$(find scripts -type f 2>/dev/null | wc -l)
         
-        # 动态获取所有的 buckets
         echo "### 已同步的仓库" >> README_temp.md
         echo "" >> README_temp.md
 
+        # 读取 buckets.yml 配置文件
+        if [ -f "buckets.yml" ]; then
+          echo "正在读取 buckets.yml 配置文件..."
+          
+          # 使用 Python 解析 YAML
+          python3 -c "
+import yaml
+import os
+
+# 安装 pyyaml 如果不存在
+try:
+    import yaml
+except ImportError:
+    os.system('pip3 install pyyaml > /dev/null 2>&1')
+    import yaml
+
+# 读取配置文件
+with open('buckets.yml', 'r') as f:
+    config = yaml.safe_load(f)
+
+# 生成仓库映射
+repo_mapping = {}
+if 'buckets' in config:
+    for bucket in config['buckets']:
+        name = bucket.get('name', '')
+        repo = bucket.get('repo', '')
+        if name and repo:
+            repo_mapping[name] = repo
+            
+# 保存为 Python 可读的格式
+with open('repo_mapping.py', 'w') as f:
+    f.write('repo_mapping = ' + str(repo_mapping))
+" || true
+          
+          # 从生成的 Python 文件中读取映射
+          if [ -f "repo_mapping.py" ]; then
+            source repo_mapping.py 2>/dev/null || true
+          fi
+        fi
+        
         # 获取已同步的所有 buckets 名称
-        for bucket in $(ls buckets); do
+        for bucket in $(ls buckets 2>/dev/null || echo ""); do
           if [ -d "buckets/$bucket" ]; then
-            bucket_apps=$(find buckets/$bucket -name "*.json" | wc -l)
+            bucket_apps=$(find buckets/$bucket -name "*.json" 2>/dev/null | wc -l)
             
             # 统计对应仓库的脚本数量
             bucket_scripts=0
-            for script in scripts/*; do
+            for script in scripts/* 2>/dev/null; do
               if [ -f "$script" ]; then
                 # 检查脚本是否与当前仓库相关
                 script_name=$(basename "$script")
@@ -223,13 +322,37 @@ jobs:
             done
             
             if [ "$bucket_apps" -gt 0 ]; then
+              # 从配置文件中获取对应的repo
+              repo=$(python3 -c "
+import yaml
+import os
+import sys
+
+try:
+    with open('buckets.yml', 'r') as f:
+        config = yaml.safe_load(f)
+    
+    bucket_name = '$bucket'
+    repo_name = bucket_name  # 默认
+    
+    if 'buckets' in config:
+        for bucket_config in config['buckets']:
+            if bucket_config.get('name') == bucket_name:
+                repo_name = bucket_config.get('repo', bucket_name)
+                break
+    
+    print(repo_name)
+except Exception as e:
+    # 出错时使用 bucket 名称
+    print('$bucket')
+" 2>/dev/null || echo "$bucket")
+              
               if [ "$bucket_scripts" -gt 0 ]; then
-                # 动态添加每个仓库的统计信息
                 echo "- **$bucket**: $bucket_apps 个应用程序 + $bucket_scripts 个脚本" >> README_temp.md
-                echo "  - 源仓库: [https://github.com/$bucket](https://github.com/$bucket)" >> README_temp.md
+                echo "  - 源仓库: [$repo](https://github.com/$repo)" >> README_temp.md
               else
                 echo "- **$bucket**: $bucket_apps 个应用程序" >> README_temp.md
-                echo "  - 源仓库: [https://github.com/$bucket](https://github.com/$bucket)" >> README_temp.md
+                echo "  - 源仓库: [$repo](https://github.com/$repo)" >> README_temp.md
               fi
               total_apps=$((total_apps + bucket_apps))
             fi

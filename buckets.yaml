@@ -1,0 +1,19 @@
+# buckets.yml - 同步的 Scoop 仓库配置
+version: 1.0
+description: Scoop CTF 工具仓库同步配置
+
+buckets:
+  - name: sec
+    repo: tldro/scoop-security
+    description: 安全工具集合
+    enabled: true
+    
+  - name: ar
+    repo: arch3rPro/PST-Bucket
+    description: PST 相关工具
+    enabled: true
+    
+  - name: ctftools
+    repo: kengwang/scoop-ctftools-bucket
+    description: CTF 比赛工具
+    enabled: true
