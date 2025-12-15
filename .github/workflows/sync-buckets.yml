@@ -28,6 +28,8 @@ jobs:
             repo: tldro/scoop-security
           - name: ar
             repo: arch3rPro/PST-Bucket
+          - name: ctftools
+            repo: kengwang/scoop-ctftools-bucket
     
     steps:
     - name: 检出仓库
