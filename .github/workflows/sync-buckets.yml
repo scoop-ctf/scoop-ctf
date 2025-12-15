@@ -8,7 +8,7 @@ on:
     # 允许手动触发
     inputs:
       bucket:
-        description: 'Specific bucket to sync (leave empty for all)'
+        description: '指定要同步的 bucket（如果不指定，默认同步所有）'
         required: false
         default: ''
 
