@@ -211,7 +211,7 @@ jobs:
         echo "### 已同步的 Buckets" >> README_temp.md
         echo "" >> README_temp.md
         
-        # 统计我们同步的bucket
+        # 只统计我们同步的两个bucket
         for bucket in sec ar; do
           if [ -d "buckets/$bucket" ]; then
             bucket_apps=$(find buckets/$bucket -name "*.json" | wc -l)
@@ -227,5 +227,3 @@ jobs:
                 fi
               fi
             done
-            
-            if [ "$
