@@ -1,16 +1,13 @@
 # scoop-ctf
-最后更新时间: 2025年12月16日 00:21:27
+最后更新时间: 2025年12月16日 00:27:38
 
 ## 统计信息
 
 ### 已同步的仓库
 
 - **ar**: 392 个应用程序
-  - 源仓库: [https://github.com/](https://github.com/)
 - **ctftools**: 78 个应用程序
-  - 源仓库: [https://github.com/](https://github.com/)
 - **sec**: 121 个应用程序
-  - 源仓库: [https://github.com/](https://github.com/)
 
 ### 总计
 
