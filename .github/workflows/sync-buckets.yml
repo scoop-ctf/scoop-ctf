@@ -69,6 +69,8 @@ jobs:
           mkdir -p ../../buckets/${{ matrix.bucket.name }}
           rm -f ../../buckets/${{ matrix.bucket.name }}/*.json 2>/dev/null || true
           cp bucket/*.json ../../buckets/${{ matrix.bucket.name }}/
+        else
+          echo "No bucket directory found, skipping sync..."
         fi
 
         # 处理 scripts 目录
