@@ -15,6 +15,15 @@ on:
 env:
   TZ: Asia/Shanghai
 
+# 在工作流级别定义统一的 bucket 配置
+env:
+  BUCKET_CONFIG_JSON: |
+    [
+      {"name": "sec", "repo": "tldro/scoop-security"},
+      {"name": "ar", "repo": "arch3rPro/PST-Bucket"},
+      {"name": "ctftools", "repo": "kengwang/scoop-ctftools-bucket"}
+    ]
+
 jobs:
   sync-buckets:
     runs-on: ubuntu-latest
@@ -23,13 +32,8 @@ jobs:
       fail-fast: false
       max-parallel: 1  # 一次只运行一个job，避免并发推送冲突
       matrix:
-        bucket:
-          - name: sec
-            repo: tldro/scoop-security
-          - name: ar
-            repo: arch3rPro/PST-Bucket
-          - name: ctftools
-            repo: kengwang/scoop-ctftools-bucket
+        # 从工作流级别的环境变量获取配置
+        bucket: ${{ fromJson(env.BUCKET_CONFIG_JSON) }}
     
     steps:
     - name: 检出代码库
@@ -44,11 +48,13 @@ jobs:
       run: |
         git config --global user.name "GitHub Actions Bot"
         git config --global user.email "actions@github.com"
+
     - name: 如果指定了仓库，则跳过
       if: github.event.inputs.bucket != '' && github.event.inputs.bucket != matrix.bucket.name
       run: |
         echo "跳过 ${{ matrix.bucket.name }} - 只同步 ${{ github.event.inputs.bucket }}"
         exit 0
+
     - name: 检查现有文件
       if: github.event.inputs.bucket == '' || github.event.inputs.bucket == matrix.bucket.name
       id: check_existing
@@ -61,6 +67,7 @@ jobs:
           echo "existing_count=0" >> $GITHUB_OUTPUT
           echo "没有找到 ${{ matrix.bucket.name }} 的文件"
         fi
+
     - name: 克隆源代码库
       if: github.event.inputs.bucket == '' || github.event.inputs.bucket == matrix.bucket.name
       run: |
@@ -123,6 +130,7 @@ jobs:
         # 清理临时目录
         cd ../..
         rm -rf temp_sync
+
     - name: 提交此仓库的更改
       if: github.event.inputs.bucket == '' || github.event.inputs.bucket == matrix.bucket.name
       run: |
@@ -143,6 +151,7 @@ jobs:
           git commit -m "更新 ${{ matrix.bucket.name }} - $total_count 个文件 ($bucket_count 个 bucket + $script_count 个脚本) ($(date '+%Y-%m-%d %H:%M:%S'))"
           echo "提交了 ${{ matrix.bucket.name }} 的更改: $total_count 个文件"
         fi
+
     - name: 推送更改
       if: github.event.inputs.bucket == '' || github.event.inputs.bucket == matrix.bucket.name
       run: |
@@ -166,6 +175,7 @@ jobs:
         else
           echo "没有新的提交需要推送"
         fi
+
   update-readme:
     needs: sync-buckets
     runs-on: ubuntu-latest
@@ -181,6 +191,9 @@ jobs:
       run: git pull origin main
     
     - name: 更新 README 时间戳和统计信息
+      env:
+        # 使用工作流级别的统一配置
+        BUCKET_CONFIG: ${{ env.BUCKET_CONFIG_JSON }}
       run: |
         current_time=$(TZ=Asia/Shanghai date '+%Y年%m月%d日 %H:%M:%S')
         
@@ -199,46 +212,49 @@ jobs:
         echo "" >> README_temp.md
         
         total_apps=0
-        total_scripts=$(find scripts -type f 2>/dev/null | wc -l)
+        total_scripts=0
+        if [ -d "scripts" ]; then
+          total_scripts=$(find scripts -type f 2>/dev/null | wc -l)
+        fi
         
         # 动态获取所有的 buckets
         echo "### 已同步的仓库" >> README_temp.md
         echo "" >> README_temp.md
-        # 获取已同步的所有 buckets 名称
-        for bucket in $(ls buckets); do
-          if [ -d "buckets/$bucket" ]; then
-            bucket_apps=$(find buckets/$bucket -name "*.json" | wc -l)
+        
+        # 解析 JSON 配置
+        echo "$BUCKET_CONFIG" | jq -c '.[]' | while read -r bucket; do
+          bucket_name=$(echo "$bucket" | jq -r '.name')
+          bucket_repo=$(echo "$bucket" | jq -r '.repo')
+          
+          if [ -d "buckets/$bucket_name" ]; then
+            bucket_apps=$(find "buckets/$bucket_name" -name "*.json" 2>/dev/null | wc -l)
             
             # 统计对应仓库的脚本数量
             bucket_scripts=0
-            for script in scripts/*; do
-              if [ -f "$script" ]; then
-                # 检查脚本是否与当前仓库相关
-                script_name=$(basename "$script")
-                if echo "$script_name" | grep -qi "$bucket"; then
-                  bucket_scripts=$((bucket_scripts + 1))
+            if [ -d "scripts" ]; then
+              for script in scripts/*; do
+                if [ -f "$script" ]; then
+                  script_name=$(basename "$script")
+                  # 更灵活的匹配逻辑
+                  if echo "$script_name" | grep -qi "$bucket_name"; then
+                    bucket_scripts=$((bucket_scripts + 1))
+                  fi
                 fi
-              fi
-            done
-            
-            # 获取源仓库地址
-            bucket_repo=$(grep -E "^\s*- name: $bucket" <<< "${{ toJson(matrix.bucket) }}" | sed -E 's/.*repo:\s*([^\s]+).*/\1/')
+              done
+            fi
             
             if [ "$bucket_apps" -gt 0 ]; then
               if [ "$bucket_scripts" -gt 0 ]; then
-                # 动态添加每个仓库的统计信息
-                echo "- **$bucket**: $bucket_apps 个应用程序 + $bucket_scripts 个脚本" >> README_temp.md
-                echo "  - 源仓库: [https://github.com/$bucket_repo](https://github.com/$bucket_repo)" >> README_temp.md
+                echo "- **$bucket_name**: $bucket_apps 个应用程序 + $bucket_scripts 个脚本" >> README_temp.md
               else
-                echo "- **$bucket**: $bucket_apps 个应用程序" >> README_temp.md
-                echo "  - 源仓库: [https://github.com/$bucket_repo](https://github.com/$bucket_repo)" >> README_temp.md
+                echo "- **$bucket_name**: $bucket_apps 个应用程序" >> README_temp.md
               fi
+              echo "  - 源仓库: [$bucket_repo](https://github.com/$bucket_repo)" >> README_temp.md
+              echo "" >> README_temp.md
               total_apps=$((total_apps + bucket_apps))
             fi
           fi
         done
-
-        echo "" >> README_temp.md
         
         echo "### 总计" >> README_temp.md
         echo "" >> README_temp.md
@@ -258,7 +274,7 @@ jobs:
         mv README_temp.md README.md
         
         echo "已更新 README，包含 $total_apps 个应用程序和 $total_scripts 个脚本"
-    
+  
     - name: 提交 README 更新
       run: |
         git config --global user.name "GitHub Actions Bot"
