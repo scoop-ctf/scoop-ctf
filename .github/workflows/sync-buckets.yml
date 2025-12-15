@@ -258,7 +258,7 @@ jobs:
         # echo "- 支持选择性同步: 可指定同步特定仓库" >> README_temp.md
 
         # scoop 添加 scoop-ctf bucket 信息
-        echo "### scoop 添加 scoop-ctf bucket 信息" >> README_temp.md
+        echo "## scoop 添加 scoop-ctf bucket " >> README_temp.md
         echo '```bash' >> README_temp.md
         echo 'scoop bucket add scoop-ctf https://github.com/scoop-ctf/scoop-ctf' >> README_temp.md
         echo '```' >> README_temp.md
