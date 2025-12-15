@@ -74,7 +74,9 @@ jobs:
         # 处理 scripts 目录
         if [ -d "scripts" ]; then
           echo "同步脚本文件..."
-          cp -r scripts/* ../../scripts/
+          cp -r scripts/* ../../scripts/ || echo "No scripts directory found in the repo"
+        else
+          echo "No 'scripts' directory found in the source repo"
         fi
 
         # 清理临时仓库
