@@ -33,8 +33,10 @@ jobs:
         echo "读取 buckets.yml 配置..."
         # 使用 yq 读取并过滤启用的仓库
         buckets=$(cat buckets.yml | yq e '.buckets | map(select(.enabled == true))' -)
-        # 将结果输出到GitHub Actions环境变量中
-        echo "::set-output name=buckets::$(echo $buckets)"
+        echo "启用的仓库列表：$buckets"
+        # 输出到环境变量中，供后续步骤使用
+        echo "buckets=$buckets" >> $GITHUB_ENV
+        echo "::set-output name=buckets::$buckets"  # 临时保留，主要用于调试
 
   sync-buckets:
     runs-on: ubuntu-latest
@@ -43,8 +45,8 @@ jobs:
       fail-fast: false
       max-parallel: 1  # 一次只运行一个job，避免并发推送冲突
       matrix:
-        # 从 read-buckets 传递的 output 生成 matrix
-        bucket: ${{ fromJson(needs.read-buckets.outputs.buckets) }}
+        # 从 read-buckets 输出的环境变量中读取 `buckets` 作为 matrix 的值
+        bucket: ${{ fromJson(env.buckets) }}
 
     steps:
     - name: 检出代码库
