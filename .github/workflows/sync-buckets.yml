@@ -154,3 +154,4 @@ jobs:
         else
           git commit -m "Update README with latest statistics - $(date '+%Y-%m-%d %H:%M:%S')"
           git push origin main
+        fi
