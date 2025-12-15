@@ -14,9 +14,6 @@ on:
 
 env:
   TZ: Asia/Shanghai
-
-# 在工作流级别定义统一的 bucket 配置
-env:
   BUCKET_CONFIG_JSON: |
     [
       {"name": "sec", "repo": "tldro/scoop-security"},
