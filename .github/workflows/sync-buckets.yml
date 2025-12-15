@@ -28,6 +28,7 @@ jobs:
             repo: tldro/scoop-security
           - name: ar
             repo: arch3rPro/PST-Bucket
+
     steps:
     - name: Checkout repository
       if: ${{ github.event.inputs.bucket == '' || github.event.inputs.bucket == matrix.bucket.name }}
@@ -53,7 +54,8 @@ jobs:
       run: |
         # 确保目标目录存在
         mkdir -p buckets/${{ matrix.bucket.name }} scripts
-        
+        echo "Target directory for bucket: buckets/${{ matrix.bucket.name }}"
+
         # 克隆源仓库
         echo "Cloning ${{ matrix.bucket.repo }}..."
         git clone --filter=blob:none --sparse https://github.com/${{ matrix.bucket.repo }}.git temp_repo
@@ -63,16 +65,18 @@ jobs:
         # 处理 bucket 目录
         if [ -d "bucket" ]; then
           echo "同步 bucket 文件..."
+          # 确保目标目录存在
+          mkdir -p ../../buckets/${{ matrix.bucket.name }}  # 确保目标目录存在
           rm -f ../../buckets/${{ matrix.bucket.name }}/*.json 2>/dev/null || true
           cp bucket/*.json ../../buckets/${{ matrix.bucket.name }}/
         fi
-        
+
         # 处理 scripts 目录
         if [ -d "scripts" ]; then
           echo "同步脚本文件..."
           cp -r scripts/* ../../scripts/
         fi
-        
+
         # 清理临时仓库
         cd ../..
         rm -rf temp_repo
@@ -158,4 +162,3 @@ jobs:
         else
           git commit -m "Update README with latest statistics - $(date '+%Y-%m-%d %H:%M:%S')"
           git push origin main
-        fi
