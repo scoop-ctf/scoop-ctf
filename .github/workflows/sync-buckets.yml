@@ -1,0 +1,161 @@
+name: Sync Scoop Official Buckets
+
+on:
+  schedule:
+    # 每天北京时间早上8点运行 (UTC时间0点)
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+    # 允许手动触发
+    inputs:
+      bucket:
+        description: 'Specific bucket to sync (leave empty for all)'
+        required: false
+        default: ''
+
+env:
+  TZ: Asia/Shanghai
+
+jobs:
+  sync-buckets:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      max-parallel: 1  # 一次只运行一个job，避免并发推送冲突
+      matrix:
+        bucket:
+          - name: sec
+            repo: tldro/scoop-security
+          - name: ar
+            repo: arch3rPro/PST-Bucket
+    steps:
+    - name: Checkout repository
+      if: ${{ github.event.inputs.bucket == '' || github.event.inputs.bucket == matrix.bucket.name }}
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+
+    - name: Setup Git
+      if: ${{ github.event.inputs.bucket == '' || github.event.inputs.bucket == matrix.bucket.name }}
+      run: |
+        git config --global user.name "GitHub Actions Bot"
+        git config --global user.email "actions@github.com"
+
+    - name: Skip if specific bucket requested
+      if: ${{ github.event.inputs.bucket != '' && github.event.inputs.bucket != matrix.bucket.name }}
+      run: |
+        echo "Skipping ${{ matrix.bucket.name }} - only syncing ${{ github.event.inputs.bucket }}"
+        exit 0
+
+    - name: Check and sync files
+      if: ${{ github.event.inputs.bucket == '' || github.event.inputs.bucket == matrix.bucket.name }}
+      run: |
+        # 确保目标目录存在
+        mkdir -p buckets/${{ matrix.bucket.name }} scripts
+        
+        # 克隆源仓库
+        echo "Cloning ${matrix.bucket.repo}..."
+        git clone --filter=blob:none --sparse https://github.com/${{ matrix.bucket.repo }}.git temp_repo
+        cd temp_repo
+        git sparse-checkout set bucket scripts
+
+        # 处理 bucket 目录
+        if [ -d "bucket" ]; then
+          echo "同步 bucket 文件..."
+          rm -f ../../buckets/${{ matrix.bucket.name }}/*.json 2>/dev/null || true
+          cp bucket/*.json ../../buckets/${{ matrix.bucket.name }}/
+        fi
+        
+        # 处理 scripts 目录
+        if [ -d "scripts" ]; then
+          echo "同步脚本文件..."
+          cp -r scripts/* ../../scripts/
+        fi
+        
+        # 清理临时仓库
+        cd ../..
+        rm -rf temp_repo
+
+    - name: Commit changes for this bucket
+      if: ${{ github.event.inputs.bucket == '' || github.event.inputs.bucket == matrix.bucket.name }}
+      run: |
+        git add buckets/${{ matrix.bucket.name }}/ scripts/
+        if git diff --cached --quiet; then
+          echo "No changes detected for ${{ matrix.bucket.name }}"
+        else
+          git commit -m "Update ${{ matrix.bucket.name }} - $(date '+%Y-%m-%d %H:%M:%S')"
+        fi
+
+    - name: Push changes
+      if: ${{ github.event.inputs.bucket == '' || github.event.inputs.bucket == matrix.bucket.name }}
+      run: |
+        if git log origin/main..HEAD --oneline | grep -q .; then
+          git pull --rebase origin main || true
+          git push origin main || true
+        else
+          echo "No new commits to push for ${{ matrix.bucket.name }}"
+        fi
+
+  update-readme:
+    needs: sync-buckets
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+
+    - name: Pull latest changes
+      run: git pull origin main
+
+    - name: Update README timestamp and statistics
+      run: |
+        current_time=$(TZ=Asia/Shanghai date '+%Y年%m月%d日 %H:%M:%S')
+        cp README.md README_temp.md
+        sed -i '/最后更新时间:/,$d' README_temp.md
+        echo "最后更新时间: $current_time" >> README_temp.md
+
+        total_count=0
+        total_scripts=$(find scripts -type f 2>/dev/null | wc -l)
+
+        for bucket in main extras versions nirsoft php nonportable java games nerd-fonts sysinternals; do
+          if [ -d "buckets/$bucket" ]; then
+            bucket_count=$(find buckets/$bucket -name "*.json" | wc -l)
+            if [ "$bucket_count" -gt 0 ]; then
+              repo_name="ScoopInstaller/$bucket"
+              script_count=0
+              temp_dir="temp_count_$bucket"
+              git clone --depth 1 --filter=blob:none --sparse https://github.com/$repo_name.git $temp_dir
+              cd $temp_dir
+              git sparse-checkout set scripts
+              if [ -d "scripts" ]; then
+                script_count=$(find scripts -type f | wc -l)
+              fi
+              cd .. && rm -rf $temp_dir
+
+              if [ "$script_count" -gt 0 ]; then
+                echo "- $bucket: $bucket_count 个应用程序 + $script_count 个脚本" >> README_temp.md
+              else
+                echo "- $bucket: $bucket_count 个应用程序" >> README_temp.md
+              fi
+              total_count=$((total_count + bucket_count))
+            fi
+          fi
+        done
+        echo "总计: $total_count 个应用程序 + $total_scripts 个脚本" >> README_temp.md
+        mv README_temp.md README.md
+
+    - name: Commit README update
+      run: |
+        git config --global user.name "GitHub Actions Bot"
+        git config --global user.email "actions@github.com"
+        git add README.md
+        if git diff --cached --quiet; then
+          echo "No changes to commit for README"
+        else
+          git commit -m "Update README with latest statistics - $(date '+%Y-%m-%d %H:%M:%S')"
+          git push origin main
+        fi
