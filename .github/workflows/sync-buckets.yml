@@ -1,4 +1,4 @@
-name: Sync Scoop Official Buckets
+name: Sync Scoop CTF Buckets
 
 on:
   schedule:
@@ -33,7 +33,7 @@ jobs:
       if: ${{ github.event.inputs.bucket == '' || github.event.inputs.bucket == matrix.bucket.name }}
       uses: actions/checkout@v4
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
+        token: ${{ secrets.GH_TOKEN }}  # 使用自定义的 GH_TOKEN
         fetch-depth: 0
 
     - name: Setup Git
@@ -55,7 +55,7 @@ jobs:
         mkdir -p buckets/${{ matrix.bucket.name }} scripts
         
         # 克隆源仓库
-        echo "Cloning ${matrix.bucket.repo}..."
+        echo "Cloning ${{ matrix.bucket.repo }}..."
         git clone --filter=blob:none --sparse https://github.com/${{ matrix.bucket.repo }}.git temp_repo
         cd temp_repo
         git sparse-checkout set bucket scripts
@@ -105,7 +105,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
+        token: ${{ secrets.GH_TOKEN }}  # 使用自定义的 GH_TOKEN
         fetch-depth: 0
 
     - name: Pull latest changes
