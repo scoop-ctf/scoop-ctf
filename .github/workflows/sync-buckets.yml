@@ -30,7 +30,7 @@ jobs:
             repo: arch3rPro/PST-Bucket
 
     steps:
-    - name: Checkout repository
+    - name: Checkout and setup repository
       if: ${{ github.event.inputs.bucket == '' || github.event.inputs.bucket == matrix.bucket.name }}
       uses: actions/checkout@v4
       with:
@@ -51,7 +51,7 @@ jobs:
         echo "目标目录 buckets 和 scripts 已确保存在"
 
     - name: Skip if specific bucket requested
-      if: ${{ github.event.inputs.bucket != '' && github.event.inputs.bucket != matrix.bucket.name && github.event.inputs.bucket != null }}
+      if: ${{ github.event.inputs.bucket != '' && github.event.inputs.bucket != matrix.bucket.name }}
       run: |
         echo "跳过 ${{ matrix.bucket.name }} - 只同步 ${{ github.event.inputs.bucket }}"
         exit 0
