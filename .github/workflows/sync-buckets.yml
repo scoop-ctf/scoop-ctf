@@ -49,6 +49,11 @@ jobs:
       run: |
         echo "Skipping ${{ matrix.bucket.name }} - only syncing ${{ github.event.inputs.bucket }}"
         exit 0
+    - name: Ensure target directories exist
+      run: |
+        echo "Ensuring target directories exist..."
+        mkdir -p buckets scripts
+        echo "Target directory for buckets and scripts ensured"
 
     - name: Check and sync files
       if: ${{ github.event.inputs.bucket == '' || github.event.inputs.bucket == matrix.bucket.name }}
