@@ -41,12 +41,12 @@ jobs:
       - name: 执行同步操作
         run: |
           # 获取从步骤中传递的桶列表
-          buckets=${{ steps.set-buckets.outputs.buckets }}
+          buckets="${{ steps.set-buckets.outputs.buckets }}"
           
-          # 转换为 JSON 对象并遍历每个 bucket
+          # 使用 jq 解析 JSON 数据并遍历每个 bucket
           echo "同步仓库配置: $buckets"
           
-          # 使用 jq 解析 JSON 数据并遍历每个桶
+          # 使用 jq 解析 JSON 数据并遍历每个仓库配置
           for bucket in $(echo $buckets | jq -c '.[]'); do
             name=$(echo $bucket | jq -r '.name')
             repo=$(echo $bucket | jq -r '.repo')
