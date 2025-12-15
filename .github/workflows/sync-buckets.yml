@@ -251,11 +251,11 @@ jobs:
         echo "" >> README_temp.md
         
         # 添加同步时间信息
-        echo "### 同步信息" >> README_temp.md
-        echo "" >> README_temp.md
-        echo "- 每日自动同步: 北京时间 08:00 (UTC 00:00)" >> README_temp.md
-        echo "- 支持手动触发: 在 GitHub Actions 页面手动运行工作流" >> README_temp.md
-        echo "- 支持选择性同步: 可指定同步特定仓库" >> README_temp.md
+        # echo "### 同步信息" >> README_temp.md
+        # echo "" >> README_temp.md
+        # echo "- 每日自动同步: 北京时间 08:00 (UTC 00:00)" >> README_temp.md
+        # echo "- 支持手动触发: 在 GitHub Actions 页面手动运行工作流" >> README_temp.md
+        # echo "- 支持选择性同步: 可指定同步特定仓库" >> README_temp.md
         
         # 替换原文件
         mv README_temp.md README.md
