@@ -1,4 +1,157 @@
 name: 同步 Scoop CTF 仓库
+
+on:
+  schedule:
+    # 每天北京时间早上8点运行 (UTC时间0点)
+    - cron: '0 0 * * *'
+  push:
+    # 当工作流文件本身被修改时触发
+    paths:
+      - '.github/workflows/sync-buckets.yml'
+  workflow_dispatch:
+    # 允许手动触发
+    inputs:
+      bucket:
+        description: '指定要同步的仓库（留空表示同步所有）'
+        required: false
+        default: ''
+
+env:
+  TZ: Asia/Shanghai
+
+jobs:
+  sync-buckets:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      max-parallel: 1  # 一次只运行一个job，避免并发推送冲突
+      matrix:
+        bucket:
+          - name: sec
+            repo: tldro/scoop-security
+          - name: ar
+            repo: arch3rPro/PST-Bucket
+          - name: ctftools
+            repo: kengwang/scoop-ctftools-bucket
+    
+    steps:
+    - name: 检出代码库
+      if: github.event.inputs.bucket == '' || github.event.inputs.bucket == matrix.bucket.name
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GH_TOKEN }}
+        fetch-depth: 0
+
+    - name: 设置 Git
+      if: github.event.inputs.bucket == '' || github.event.inputs.bucket == matrix.bucket.name
+      run: |
+        git config --global user.name "GitHub Actions Bot"
+        git config --global user.email "actions@github.com"
+    - name: 如果指定了仓库，则跳过
+      if: github.event.inputs.bucket != '' && github.event.inputs.bucket != matrix.bucket.name
+      run: |
+        echo "跳过 ${{ matrix.bucket.name }} - 只同步 ${{ github.event.inputs.bucket }}"
+        exit 0
+    - name: 检查现有文件
+      if: github.event.inputs.bucket == '' || github.event.inputs.bucket == matrix.bucket.name
+      id: check_existing
+      run: |
+        existing_count=$(find buckets -name "*.json" | wc -l)
+        echo "existing_count=$existing_count" >> $GITHUB_OUTPUT
+        echo "在 buckets 目录中找到 $existing_count 个文件"
+    - name: 克隆源代码库
+      if: github.event.inputs.bucket == '' || github.event.inputs.bucket == matrix.bucket.name
+      run: |
+        echo "克隆 ${{ matrix.bucket.repo }}..."
+        # 创建临时目录
+        mkdir -p temp_sync
+        cd temp_sync
+        
+        # 克隆源仓库（仅bucket和scripts目录）
+        git clone --filter=blob:none --sparse https://github.com/${{ matrix.bucket.repo }}.git source_repo
+        cd source_repo
+        git sparse-checkout set bucket scripts
+        
+        # 统计文件数量并复制内容
+        bucket_files=0
+        script_files=0
+        
+        # 创建目标目录（强制创建，即使已存在）
+        mkdir -p ../../buckets
+        mkdir -p ../../scripts
+        
+        # 处理bucket目录
+        if [ -d "bucket" ]; then
+          bucket_files=$(find bucket -name "*.json" | wc -l)
+          echo "在 bucket 目录中找到 $bucket_files 个 JSON 文件"
+          
+          # 复制所有JSON文件，检查是否已存在同名文件
+          echo "复制 bucket JSON 文件..."
+          for file in bucket/*.json; do
+            filename=$(basename "$file")
+            if [ ! -f "../../buckets/$filename" ]; then
+              cp "$file" ../../buckets/
+              echo "已添加 $filename"
+            else
+              echo "跳过 $filename (已存在)"
+            fi
+          done
+          
+          # 验证bucket复制结果
+          copied_bucket_files=$(find ../../buckets -name "*.json" | wc -l)
+          echo "成功复制 $((copied_bucket_files - ${{ steps.check_existing.outputs.existing_count }})) 个 bucket 文件到 buckets/"
+        else
+          echo "源代码库中没有找到 bucket 目录"
+        fi
+        
+        # 处理scripts目录
+        if [ -d "scripts" ]; then
+          script_files=$(find scripts -type f | wc -l)
+          echo "在 scripts 目录中找到 $script_files 个脚本文件"
+          
+          # 复制所有脚本文件到统一的scripts目录（保持原始路径结构）
+          echo "复制脚本文件..."
+          cp -r scripts/* ../../scripts/ 2>/dev/null || true
+          
+          # 验证scripts复制结果
+          copied_script_files=$(find ../../scripts -type f | wc -l)
+          echo "成功复制脚本文件到 scripts/ 目录"
+        else
+          echo "源代码库中没有找到 scripts 目录"
+        fi
+        
+        total_files=$((bucket_files + script_files))
+        echo "总共同步了 $total_files 个文件（$bucket_files 个 bucket 文件 + $script_files 个脚本）"
+        
+        # 清理临时目录
+        cd ../..
+        rm -rf temp_sync
+    - name: 提交此仓库的更改
+      if: github.event.inputs.bucket == '' || github.event.inputs.bucket == matrix.bucket.name
+      run: |
+        # 先添加所有变化到Git
+        git add buckets/ scripts/
+        
+        # 检查是否有staged变化
+        if git diff --cached --quiet; then
+          echo "没有检测到 ${{ matrix.bucket.name }} 的更改"
+        else
+          echo "检测到 ${{ matrix.bucket.name }} 的更改，正在提交..."
+          
+          # 统计文件数量
+          bucket_count=$(find buckets -name "*.json" 2>/dev/null | wc -l)
+          script_count=$(find scripts -type f 2>/dev/null | wc -l)
+          total_count=$((bucket_count + script_count))
+          
+          git commit -m "更新 ${{ matrix.bucket.name }} - $total_count 个文件 ($bucket_count 个 bucket + $script_count 个脚本) ($(date '+%Y-%m-%d %H:%M:%S'))"
+          echo "提交了 ${{ matrix.bucket.name }} 的更改: $total_count 个文件"
+        fi
+    - name: 推送更改
+      if: github.event.inputs.bucket == '' || github.event.inputs.bucket == matrix.bucket.name
+      run: |
+        if git log origin/main..HEAD --oneline | grep -q .; then
+          echo "正在推送 ${{ matrix.bucket.name }} 的更改..."
           
           # 推送前先拉取最新更改，避免冲突
           git pull --rebase origin main || true
