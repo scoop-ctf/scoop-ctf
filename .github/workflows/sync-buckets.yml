@@ -243,12 +243,12 @@ jobs:
         done
         echo "" >> README_temp.md
         
-        echo "### 总计" >> README_temp.md
-        echo "" >> README_temp.md
-        echo "**应用程序总数**: $total_apps" >> README_temp.md
-        echo "" >> README_temp.md
-        echo "**脚本总数**: $total_scripts" >> README_temp.md
-        echo "" >> README_temp.md
+        # echo "### 总计" >> README_temp.md
+        # echo "" >> README_temp.md
+        # echo "**应用程序总数**: $total_apps" >> README_temp.md
+        # echo "" >> README_temp.md
+        # echo "**脚本总数**: $total_scripts" >> README_temp.md
+        # echo "" >> README_temp.md
         
         # 添加同步时间信息
         # echo "### 同步信息" >> README_temp.md
