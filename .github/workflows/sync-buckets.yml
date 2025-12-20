@@ -148,5 +148,16 @@ jobs:
         git add README.md
         if ! git diff --cached --quiet; then
           git commit -m "docs: 更新统计信息 ($(date '+%Y-%m-%d %H:%M:%S'))"
-          git push origin main
+          
+          # 推送重试逻辑
+          for i in {1..5}; do
+            git pull --rebase origin main
+            if git push origin main; then
+              echo "成功推送 README"
+              exit 0
+            fi
+            echo "推送失败，等待重试 ($i/5)..."
+            sleep $((i * 2))
+          done
+          exit 1
         fi
