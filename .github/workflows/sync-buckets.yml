@@ -55,21 +55,19 @@ jobs:
         echo "正在同步 ${{ matrix.bucket.name }} (repo: ${{ matrix.bucket.repo }})..."
         
         # 创建目标目录
-        TARGET_DIR="buckets/${{ matrix.bucket.name }}"
+        TARGET_DIR="buckets"
         SCRIPTS_DIR="scripts"
         mkdir -p "$TARGET_DIR"
         mkdir -p "$SCRIPTS_DIR"
-        
-        # 记录同步前的文件数
-        prev_count=$(find "$TARGET_DIR" -name "*.json" 2>/dev/null | wc -l)
         
         # 创建临时目录进行克隆
         TEMP_DIR="temp_${{ matrix.bucket.name }}"
         git clone --depth 1 https://github.com/${{ matrix.bucket.repo }}.git "$TEMP_DIR"
         
-        # 复制 bucket 目录下的 JSON 文件
+        # 复制 bucket 目录下的 JSON 文件 (不覆盖已存在的)
         if [ -d "$TEMP_DIR/bucket" ]; then
-          cp -r "$TEMP_DIR/bucket/"*.json "$TARGET_DIR/" 2>/dev/null || true
+          echo "复制新的 JSON 文件..."
+          cp -n "$TEMP_DIR/bucket/"*.json "$TARGET_DIR/" 2>/dev/null || true
         fi
         
         # 复制 scripts 目录下的文件
@@ -79,11 +77,6 @@ jobs:
         
         # 清理
         rm -rf "$TEMP_DIR"
-        
-        # 统计
-        curr_count=$(find "$TARGET_DIR" -name "*.json" 2>/dev/null | wc -l)
-        new_files=$((curr_count - prev_count))
-        echo "同步完成。当前总数: $curr_count (新增: $new_files)"
 
     - name: 提交并推送更改
       if: github.event.inputs.bucket == '' || github.event.inputs.bucket == matrix.bucket.name
@@ -121,12 +114,9 @@ jobs:
       run: |
         current_time=$(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S')
         
-        # 定义仓库映射（用于链接）
-        declare -A REPO_MAP
-        REPO_MAP["sec"]="tldro/scoop-security"
-        REPO_MAP["ar"]="arch3rPro/PST-Bucket"
-        REPO_MAP["ctftools"]="kengwang/scoop-ctftools-bucket"
-
+        # 统计数据
+        TOTAL_APPS=$(find buckets -name "*.json" | wc -l)
+        
         # 构建 Header
         README_BODY="# 🛡️ scoop-ctf\n\n"
         README_BODY="${README_BODY}[![GitHub Stars](https://img.shields.io/github/stars/scoop-ctf/scoop-ctf?style=flat-square)](https://github.com/scoop-ctf/scoop-ctf/stargazers) "
@@ -138,30 +128,22 @@ jobs:
         # 安装指南
         README_BODY="${README_BODY}## 🚀 快速开始\n\n\`\`\`bash\n# 添加 bucket\nscoop bucket add scoop-ctf https://github.com/scoop-ctf/scoop-ctf\n\n# 搜索工具 (例如 fscan)\nscoop search fscan\n\n# 安装工具\nscoop install scoop-ctf/fscan\n\`\`\`\n\n"
         
-        # 统计表格
+        # 统计
         README_BODY="${README_BODY}## 📊 统计信息\n\n"
-        README_BODY="${README_BODY}| 仓库名称 | 清单数量 | 来源仓库 |\n"
-        README_BODY="${README_BODY}| :--- | :--- | :--- |\n"
+        README_BODY="${README_BODY}目前仓库共包含 **$TOTAL_APPS** 个安全工具清单。\n\n"
         
-        TOTAL_APPS=0
+        # 来源仓库列表
+        README_BODY="${README_BODY}### 来源仓库\n\n"
+        README_BODY="${README_BODY}| 仓库名称 | 来源地址 |\n"
+        README_BODY="${README_BODY}| :--- | :--- |\n"
+        README_BODY="${README_BODY}| **sec** | [tldro/scoop-security](https://github.com/tldro/scoop-security) |\n"
+        README_BODY="${README_BODY}| **ar** | [arch3rPro/PST-Bucket](https://github.com/arch3rPro/PST-Bucket) |\n"
+        README_BODY="${README_BODY}| **ctftools** | [kengwang/scoop-ctftools-bucket](https://github.com/kengwang/scoop-ctftools-bucket) |\n"
+        README_BODY="${README_BODY}| **main** | 🛡️ 本地维护工具 |\n\n"
         
-        # 遍历子目录并填充表格
-        for dir in buckets/*/; do
-          if [ -d "$dir" ]; then
-            name=$(basename "$dir")
-            count=$(find "$dir" -name "*.json" | wc -l)
-            repo_path=${REPO_MAP[$name]}
-            if [ -n "$repo_path" ]; then
-              repo_link="[$repo_path](https://github.com/$repo_path)"
-            else
-              repo_link="本地维护"
-            fi
-            README_BODY="${README_BODY}| **$name** | $count | $repo_link |\n"
-            TOTAL_APPS=$((TOTAL_APPS + count))
-          fi
-        done
+        # 贡献指南
+        README_BODY="${README_BODY}## 🛠️ 手动添加软件\n\n如果你想手动添加新的工具清单，请直接将 \`.json\` 文件放入 \`buckets/\` 目录并提交 PR。\n\n"
         
-        README_BODY="${README_BODY}\n**🔥 总计已同步 $TOTAL_APPS 个安全工具**\n\n"
         README_BODY="${README_BODY}> [!NOTE]\n"
         README_BODY="${README_BODY}> 数据最后更新于: \`$current_time\`\n"
         
