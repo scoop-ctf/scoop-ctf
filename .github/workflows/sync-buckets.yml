@@ -119,27 +119,54 @@ jobs:
         
     - name: 更新 README 统计信息
       run: |
-        current_time=$(TZ=Asia/Shanghai date '+%Y年%m月%d日 %H:%M:%S')
+        current_time=$(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S')
         
-        # 构建统计内容
-        STATS_CONTENT="最后更新时间: $current_time\n\n## 统计信息\n\n### 已同步的仓库\n\n"
+        # 定义仓库映射（用于链接）
+        declare -A REPO_MAP
+        REPO_MAP["sec"]="tldro/scoop-security"
+        REPO_MAP["ar"]="arch3rPro/PST-Bucket"
+        REPO_MAP["ctftools"]="kengwang/scoop-ctftools-bucket"
+
+        # 构建 Header
+        README_BODY="# 🛡️ scoop-ctf\n\n"
+        README_BODY="${README_BODY}[![GitHub Stars](https://img.shields.io/github/stars/scoop-ctf/scoop-ctf?style=flat-square)](https://github.com/scoop-ctf/scoop-ctf/stargazers) "
+        README_BODY="${README_BODY}[![GitHub License](https://img.shields.io/github/license/scoop-ctf/scoop-ctf?style=flat-square)](LICENSE) "
+        README_BODY="${README_BODY}[![Auto Sync](https://img.shields.io/badge/Auto%20Sync-Enabled-blue?style=flat-square&logo=github-actions)](.github/workflows/sync-buckets.yml)\n\n"
+        
+        README_BODY="${README_BODY}这是一个专门为安全研究人员和 CTF 玩家设计的 Scoop bucket 集合，每日从多个顶级安全仓库自动同步更新。\n\n"
+        
+        # 安装指南
+        README_BODY="${README_BODY}## 🚀 快速开始\n\n\`\`\`bash\n# 添加 bucket\nscoop bucket add scoop-ctf https://github.com/scoop-ctf/scoop-ctf\n\n# 搜索工具 (例如 fscan)\nscoop search fscan\n\n# 安装工具\nscoop install scoop-ctf/fscan\n\`\`\`\n\n"
+        
+        # 统计表格
+        README_BODY="${README_BODY}## 📊 统计信息\n\n"
+        README_BODY="${README_BODY}| 仓库名称 | 清单数量 | 来源仓库 |\n"
+        README_BODY="${README_BODY}| :--- | :--- | :--- |\n"
+        
         TOTAL_APPS=0
         
-        # 遍历 buckets 目录
+        # 遍历子目录并填充表格
         for dir in buckets/*/; do
           if [ -d "$dir" ]; then
             name=$(basename "$dir")
             count=$(find "$dir" -name "*.json" | wc -l)
-            STATS_CONTENT="${STATS_CONTENT}- **$name**: $count 个应用程序\n"
+            repo_path=${REPO_MAP[$name]}
+            if [ -n "$repo_path" ]; then
+              repo_link="[$repo_path](https://github.com/$repo_path)"
+            else
+              repo_link="本地维护"
+            fi
+            README_BODY="${README_BODY}| **$name** | $count | $repo_link |\n"
             TOTAL_APPS=$((TOTAL_APPS + count))
           fi
         done
         
-        STATS_CONTENT="${STATS_CONTENT}\n**总计**: $TOTAL_APPS 个应用程序\n\n## scoop 添加 scoop-ctf bucket\n\n\`\`\`bash\nscoop bucket add scoop-ctf https://github.com/scoop-ctf/scoop-ctf\n\`\`\`"
+        README_BODY="${README_BODY}\n**🔥 总计已同步 $TOTAL_APPS 个安全工具**\n\n"
+        README_BODY="${README_BODY}> [!NOTE]\n"
+        README_BODY="${README_BODY}> 数据最后更新于: \`$current_time\`\n"
         
-        # 生成新的 README (保留标题)
-        echo "# scoop-ctf" > README.md
-        echo -e "$STATS_CONTENT" >> README.md
+        # 写入文件
+        echo -e "$README_BODY" > README.md
         
     - name: 提交并推送 README
       run: |
